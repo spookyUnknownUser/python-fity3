@@ -1,3 +1,4 @@
+
 Fity3
 -----
 
@@ -51,3 +52,88 @@ JavaScript, this scheme might be a useful alternative.
     1413374250
 
 Let's just hope we won't be the ones supporting any of these systems in 2079.
+
+Django
+=====
+You can also use fity3 as a primary key/something else in Django, but you have
+to make a helper function to do this otherwise Django will only generate the 
+snowflake when you import the model. See https://stackoverflow.com/q/16925129/1649917
+
+Anyway to get around this all you need to do is make your model something like this:
+
+.. code:: python
+
+       # app/models.py
+       from fity3 import generator
+
+       from django.db import models
+       
+       def get_id():
+           return next(generator(0))
+
+       class Post(models.Model):
+           id = models.BigIntegerField(primary_key=True, default=get_id, editable=False)
+           # ...
+
+Or you can even do something like this, to get the date from fity3 without storing it
+
+.. code:: python
+
+       # app/models.py
+       from django.db import models
+       from django.utils import timezone
+       from fity3 import generator, to_timestamp
+
+
+       def get_id():
+           return next(generator(0))
+
+
+       class Post(models.Model):
+           id = models.BigIntegerField(primary_key=True, default=get_id, editable=False)
+           # ...
+
+           def created_at(self):
+               timestamp = to_timestamp(self.id)
+               return timezone.datetime.utcfromtimestamp(timestamp)
+               
+Or, if you're feeling DRY, and maybe want to use a snowflake id for every field in your db, you
+can make a common class that does all this for you can make a common class:
+
+.. code:: python
+
+       # app/models.py
+       # ... imports
+
+       def get_id():
+           return next(generator(0))
+
+
+       class CommonInfo(models.Model):
+           id = models.BigIntegerField(primary_key=True, default=get_id, editable=False)
+
+           def created_at(self):
+               timestamp = to_timestamp(self.id)
+               return timezone.datetime.utcfromtimestamp(timestamp)
+
+           class Meta:
+               abstract = True
+
+
+       class Post(CommonInfo):
+           post = models.CharField(max_length=50, unique=True)
+           # ...
+
+
+       class SomethingElse(CommonInfo):
+           name = models.CharField(max_length=20, unique=True)
+           # ...
+
+Now all classes that implement ``CommonInfo`` will have a ``snowflake id`` and a ``created_at`` field! 
+
+Just make sure that whatever you do, you do don't do this, you'll find out pretty soon it doesn't work. :
+
+.. code:: python
+
+        class Post(models.Model):
+                  id = models.BigIntegerField(primary_key=True, default=next(generator(0)), editable=False)
